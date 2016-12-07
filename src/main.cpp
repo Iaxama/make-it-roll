@@ -22,11 +22,12 @@ protected:
     PolyDriver drvArm, drvGaze;
     ICartesianControl *iarm;
     IGazeControl      *igaze;
+    Vector homeHeadOrientation, armHomePosition, armHomeOrientation;
 
     BufferedPort<ImageOf<PixelRgb> > imgLPortIn,imgRPortIn;
     Port imgLPortOut,imgRPortOut;
-    RpcServer rpcPort;    
-    
+    RpcServer rpcPort;
+
     Mutex mutex;
     Vector cogL,cogR;
     bool okL,okR;
@@ -66,37 +67,57 @@ protected:
     /***************************************************/
     Vector retrieveTarget3D(const Vector &cogL, const Vector &cogR)
     {
-        // FILL IN THE CODE
+        Vector ballPosition;
+        igaze->triangulate3DPoint(cogL,cogR,ballPosition);
+        return ballPosition;
     }
 
     /***************************************************/
     void fixate(const Vector &x)
     {
-        // FILL IN THE CODE
+        igaze->lookAtFixationPoint(x);
     }
 
     /***************************************************/
     Vector computeHandOrientation()
     {
-        // FILL IN THE CODE
+        Vector handOrientation(4);
+        handOrientation[0] = -1;
+        handOrientation[1] = 0;
+        handOrientation[2] = 0;
+        handOrientation[3] = M_PI_2;
+        return handOrientation;
     }
 
     /***************************************************/
     void approachTargetWithHand(const Vector &x, const Vector &o)
     {
-        // FILL IN THE CODE
+        Vector approachPosition (3);
+        approachPosition[0] = x[0];
+        approachPosition[1] = x[1] + 0.2;
+        approachPosition[2] = x[2];
+
+        iarm->goToPose(approachPosition,o);
+        iarm->waitMotionDone();
     }
 
     /***************************************************/
     void makeItRoll(const Vector &x, const Vector &o)
     {
-        // FILL IN THE CODE
+        iarm->goToPose(x,o);
+        iarm->waitMotionDone();
     }
 
     /***************************************************/
     void look_down()
     {
-        // FILL IN THE CODE
+        Vector ang(3);
+        ang[0] = 0;
+        ang[1] = -40;
+        ang[2] = 0;
+
+        igaze->lookAtRelAngles(ang);
+        igaze->waitMotionDone();
     }
 
     /***************************************************/
@@ -124,7 +145,10 @@ protected:
     /***************************************************/
     void home()
     {
-        // FILL IN THE CODE
+        igaze->lookAtAbsAngles(homeHeadOrientation);
+        iarm->goToPose(armHomePosition,armHomeOrientation);
+        igaze->waitMotionDone();
+        iarm->waitMotionDone();
     }
 
 public:
@@ -142,6 +166,48 @@ public:
         rpcPort.open("/service");
         attach(rpcPort);
 
+        //Configuring drivers for head
+        Property options;
+        options.put("device", "gazecontrollerclient");
+        options.put("local", "/client/head");
+        options.put("remote", "/iKinGazeCtrl");
+        drvGaze.open(options);
+
+        if (!drvGaze.isValid()){
+            std::cerr << "Device not available! The known devices are" << std::endl;
+            std::cerr << Drivers::factory().toString().c_str() << std::endl;
+            return false;
+        }
+
+        drvGaze.view(igaze);
+        if (igaze == 0){
+            std::cerr << "Error opening position control interface for gaze" << std::endl;
+            return false;
+        }
+
+        //Configuring drivers for right arm
+        options.put("device", "cartesiancontrollerclient");
+        options.put("local", "/client/right_arm");
+        options.put("remote", "/icubSim/cartesianController/right_arm");
+
+        drvArm.open(options);
+        if (!drvArm.isValid()){
+            std::cerr << "Device not available! The known devices are" << std::endl;
+            std::cerr << Drivers::factory().toString().c_str() << std::endl;
+            return false;
+        }
+
+        drvArm.view(iarm);
+        if (iarm == 0){
+            std::cerr << "Error opening position control interface for right arm" << std::endl;
+            return false;
+        }
+
+
+        igaze->getAngles(homeHeadOrientation);
+        iarm->getPose(armHomePosition,armHomeOrientation);
+        std::cout << "armHomePosition = " << armHomePosition.toString() << std::endl;
+        std::cout << "armHomeOrientation = " << armHomeOrientation.toString() << std::endl;
         return true;
     }
 
@@ -156,6 +222,7 @@ public:
     /***************************************************/
     bool close()
     {
+        home();
         drvArm.close();
         drvGaze.close();
         imgLPortIn.close();
@@ -186,9 +253,10 @@ public:
         }
         else if (cmd=="roll")
         {
-            // FILL IN THE CODE
+            double p[3] = {-0.1,0.35,0.15};
+            iarm->goToPosition(Vector(3,p));
 
-            if (...)
+            if (okL && okR)
             {
                 roll(cogL,cogR);
                 reply.addString("Yeah! I've made it roll like a charm!");
@@ -222,7 +290,7 @@ public:
 
         // interrupt sequence detected
         if ((imgL==NULL) || (imgR==NULL))
-            return false;
+            return true;
 
         // compute the center-of-mass of pixels of our color
         mutex.lock();
@@ -244,6 +312,8 @@ public:
 
         return true;
     }
+
+
 };
 
 
@@ -256,6 +326,8 @@ int main()
 
     CtrlModule mod;
     ResourceFinder rf;
-    return mod.runModule(rf);
+    mod.runModule(rf);
+
+    return 0;
 }
 
