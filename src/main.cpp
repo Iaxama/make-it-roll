@@ -81,12 +81,13 @@ protected:
     /***************************************************/
     Vector computeHandOrientation()
     {
-        Vector handOrientation(4);
-        handOrientation[0] = -1;
-        handOrientation[1] = 0;
-        handOrientation[2] = 0;
-        handOrientation[3] = M_PI_2;
-        return handOrientation;
+        Vector oy(4), oz(4);
+        oy[0]=0.0; oy[1]=1.0; oy[2]=0.0; oy[3]=+M_PI/2.0;
+        oz[0]=0.0; oz[1]=0.0; oz[2]=1.0; oz[3]=-M_PI/2.0;
+        Matrix Ry=yarp::math::axis2dcm(oy);        // from axis/angle to rotation matrix notation
+        Matrix Rz=yarp::math::axis2dcm(oz);
+        Matrix R=Rz*Ry;                            // compose the two rotations keeping the order
+        return yarp::math::dcm2axis(R);          // from rotation matrix back to the axis/angle notation
     }
 
     /***************************************************/
@@ -104,7 +105,12 @@ protected:
     /***************************************************/
     void makeItRoll(const Vector &x, const Vector &o)
     {
-        iarm->goToPose(x,o);
+        Vector rollingPosition (3);
+        rollingPosition[0] = x[0];
+        rollingPosition[1] = x[1] -0.2;
+        rollingPosition[2] = x[2];
+
+        iarm->goToPose(rollingPosition,o);
         iarm->waitMotionDone();
     }
 
@@ -123,23 +129,25 @@ protected:
     /***************************************************/
     void roll(const Vector &cogL, const Vector &cogR)
     {
-        yInfo("detected cogs = (%s) (%s)",
-              cogL.toString(0,0).c_str(),cogR.toString(0,0).c_str());
+//        yInfo("detected cogs = (%s) (%s)",
+//              cogL.toString(0,0).c_str(),cogR.toString(0,0).c_str());
+//
+//        Vector x=retrieveTarget3D(cogL,cogR);
+//        yInfo("retrieved 3D point = (%s)",x.toString(3,3).c_str());
+//
+//        fixate(x);
+//        yInfo("fixating at (%s)",x.toString(3,3).c_str());
 
-        Vector x=retrieveTarget3D(cogL,cogR);
-        yInfo("retrieved 3D point = (%s)",x.toString(3,3).c_str());
-
-        fixate(x);
-        yInfo("fixating at (%s)",x.toString(3,3).c_str());
-
-        Vector o=computeHandOrientation();
+        Vector x,o;
+        iarm->getPose(x,o);
+        o=computeHandOrientation();
         yInfo("computed orientation = (%s)",o.toString(3,3).c_str());
 
         approachTargetWithHand(x,o);
         yInfo("approached");
 
-        makeItRoll(x,o);
-        yInfo("roll!");
+//        makeItRoll(x,o);
+//        yInfo("roll!");
     }
 
     /***************************************************/
@@ -233,7 +241,8 @@ public:
         return true;
     }
 
-    /***************************************************/
+
+/***************************************************/
     bool respond(const Bottle &command, Bottle &reply)
     {
         string cmd=command.get(0).asString();
