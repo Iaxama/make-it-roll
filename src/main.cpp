@@ -7,6 +7,7 @@
 
 #include <iCub/ctrl/math.h>
 
+#define MAX_TORSO_PITCH 10
 using namespace std;
 using namespace yarp::os;
 using namespace yarp::dev;
@@ -81,12 +82,12 @@ protected:
     /***************************************************/
     Vector computeHandOrientation()
     {
-        Vector oy(4), oz(4);
-        oy[0]=0.0; oy[1]=1.0; oy[2]=0.0; oy[3]=+M_PI/2.0;
-        oz[0]=0.0; oz[1]=0.0; oz[2]=1.0; oz[3]=-M_PI/2.0;
-        Matrix Ry=yarp::math::axis2dcm(oy);        // from axis/angle to rotation matrix notation
+        Vector ox(4), oz(4);
+        ox[0]=1.0; ox[1]=0.0; ox[2]=0.0; ox[3]= M_PI_2;
+        oz[0]=0.0; oz[1]=0.0; oz[2]=1.0; oz[3]= -M_PI;
+        Matrix Rx=yarp::math::axis2dcm(ox);        // from axis/angle to rotation matrix notation
         Matrix Rz=yarp::math::axis2dcm(oz);
-        Matrix R=Rz*Ry;                            // compose the two rotations keeping the order
+        Matrix R=Rz*Rx;                            // compose the two rotations keeping the order
         return yarp::math::dcm2axis(R);          // from rotation matrix back to the axis/angle notation
     }
 
@@ -94,12 +95,15 @@ protected:
     void approachTargetWithHand(const Vector &x, const Vector &o)
     {
         Vector approachPosition (3);
-        approachPosition[0] = x[0];
+        approachPosition[0] = x[0];// + 0.15;
         approachPosition[1] = x[1] + 0.2;
         approachPosition[2] = x[2];
 
+        yInfo() << "Trying to reach " << approachPosition.toString().c_str();
         iarm->goToPose(approachPosition,o);
-        iarm->waitMotionDone();
+
+        if (!iarm->waitMotionDone(0.1,20.0))
+            yError() << "NOT REACHED";
     }
 
     /***************************************************/
@@ -110,7 +114,7 @@ protected:
         rollingPosition[1] = x[1] -0.2;
         rollingPosition[2] = x[2];
 
-        iarm->goToPose(rollingPosition,o);
+        bool success = iarm->goToPose(rollingPosition,o);
         iarm->waitMotionDone();
     }
 
@@ -129,18 +133,16 @@ protected:
     /***************************************************/
     void roll(const Vector &cogL, const Vector &cogR)
     {
-//        yInfo("detected cogs = (%s) (%s)",
-//              cogL.toString(0,0).c_str(),cogR.toString(0,0).c_str());
-//
-//        Vector x=retrieveTarget3D(cogL,cogR);
-//        yInfo("retrieved 3D point = (%s)",x.toString(3,3).c_str());
-//
-//        fixate(x);
-//        yInfo("fixating at (%s)",x.toString(3,3).c_str());
+        yInfo("detected cogs = (%s) (%s)",
+              cogL.toString(0,0).c_str(),cogR.toString(0,0).c_str());
 
-        Vector x,o;
-        iarm->getPose(x,o);
-        o=computeHandOrientation();
+        Vector x=retrieveTarget3D(cogL,cogR);
+        yInfo("retrieved 3D point = (%s)",x.toString(3,3).c_str());
+
+        fixate(x);
+        yInfo("fixating at (%s)",x.toString(3,3).c_str());
+
+        Vector o = computeHandOrientation();
         yInfo("computed orientation = (%s)",o.toString(3,3).c_str());
 
         approachTargetWithHand(x,o);
@@ -211,7 +213,19 @@ public:
             return false;
         }
 
+        Vector curDof, newDof;
+        iarm->getDOF(curDof);
+        std::cout << "curDof.toString().c_str() = " << curDof.toString().c_str() << std::endl;
+        newDof = curDof;
+        newDof[0] = 0; //yaw disabled
+        newDof[1] = 0; //roll disabled
+        newDof[2] = 1; //pitch enabled
 
+        iarm->setDOF(newDof,curDof);
+        limitTorsoPitch();
+
+
+        iarm->setTrackingMode(true);
         igaze->getAngles(homeHeadOrientation);
         iarm->getPose(armHomePosition,armHomeOrientation);
         std::cout << "armHomePosition = " << armHomePosition.toString() << std::endl;
@@ -219,6 +233,15 @@ public:
         return true;
     }
 
+
+    void limitTorsoPitch()
+    {
+        int axis=2; // pitch joint
+        double min, max;
+
+        iarm->getLimits(axis,&min,&max);
+        iarm->setLimits(axis,min,MAX_TORSO_PITCH);
+    }
     /***************************************************/
     bool interruptModule()
     {
@@ -230,7 +253,7 @@ public:
     /***************************************************/
     bool close()
     {
-        home();
+//        home();
         drvArm.close();
         drvGaze.close();
         imgLPortIn.close();
