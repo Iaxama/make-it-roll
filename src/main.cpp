@@ -1,5 +1,4 @@
 #include <string>
-#include <zconf.h>
 #include <yarp/os/all.h>
 #include <yarp/dev/all.h>
 #include <yarp/sig/all.h>
