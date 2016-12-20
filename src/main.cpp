@@ -1,17 +1,15 @@
 #include <string>
+
 #include <yarp/os/all.h>
 #include <yarp/dev/all.h>
 #include <yarp/sig/all.h>
 #include <yarp/math/Math.h>
-
-#include <iCub/ctrl/math.h>
 
 using namespace std;
 using namespace yarp::os;
 using namespace yarp::dev;
 using namespace yarp::sig;
 using namespace yarp::math;
-using namespace iCub::ctrl;
 
 
 /***************************************************/
@@ -21,12 +19,13 @@ protected:
     PolyDriver drvArm, drvGaze;
     ICartesianControl *iarm;
     IGazeControl      *igaze;
-    Vector homeHeadOrientation, armHomePosition, armHomeOrientation;
+    int startup_ctxt_arm;
+    int startup_ctxt_gaze;
 
     BufferedPort<ImageOf<PixelRgb> > imgLPortIn,imgRPortIn;
     Port imgLPortOut,imgRPortOut;
-    RpcServer rpcPort;
-
+    RpcServer rpcPort;    
+    
     Mutex mutex;
     Vector cogL,cogR;
     bool okL,okR;
@@ -66,84 +65,60 @@ protected:
     /***************************************************/
     Vector retrieveTarget3D(const Vector &cogL, const Vector &cogR)
     {
-        Vector ballPosition;
-        igaze->triangulate3DPoint(cogL,cogR,ballPosition);
-        return ballPosition;
+        Vector x;
+        igaze->triangulate3DPoint(cogL,cogR,x);
+        return x;
     }
 
     /***************************************************/
     void fixate(const Vector &x)
-    {
-        if (okL && okR)
+    {        
         igaze->lookAtFixationPoint(x);
+        igaze->waitMotionDone();
+        igaze->setTrackingMode(true);
     }
 
     /***************************************************/
     Vector computeHandOrientation()
     {
-        Vector ox(4), oz(4);
-        ox[0]=1.0; ox[1]=0.0; ox[2]=0.0; ox[3]= M_PI_2;
-        oz[0]=0.0; oz[1]=0.0; oz[2]=1.0; oz[3]= M_PI;
-        Matrix Rx=yarp::math::axis2dcm(ox);        // from axis/angle to rotation matrix notation
-        Matrix Rz=yarp::math::axis2dcm(oz);
-        Matrix R=Rx*Rz;                            // compose the two rotations keeping the order
-        return yarp::math::dcm2axis(R);          // from rotation matrix back to the axis/angle notation
+        Matrix R(3,3);
+        R(0,0)=-1.0; R(0,1)= 0.0; R(0,2)= 0.0;
+        R(1,0)= 0.0; R(1,1)= 0.0; R(1,2)=-1.0;
+        R(2,0)= 0.0; R(2,1)=-1.0; R(2,2)= 0.0;
+
+        return dcm2axis(R);
     }
 
     /***************************************************/
     void approachTargetWithHand(const Vector &x, const Vector &o)
     {
-        Vector approachPosition (3);
-        approachPosition[0] = x[0] + 0.05 ;
-        approachPosition[1] = x[1] + 0.1;
-        approachPosition[2] = x[2];
+        // enable torso dofs
+        Vector dof(3,1.0);
+        iarm->setDOF(dof,dof);
 
-        yInfo() << "Trying to reach position: " << approachPosition.toString().c_str();
-        yInfo() << "and Orientation: " << o.toString().c_str();
-        iarm->goToPose(approachPosition,o);
-
-        iarm->waitMotionDone(0.1,30.0);
-        Vector xReal, oReal;
-        iarm->getPose(xReal,oReal);
-        yInfo() << "hand Position: " << xReal.toString().c_str();
-        yInfo() << "hand Orientation: " << oReal.toString().c_str();
+        Vector approach_x=x;
+        approach_x[1]+=0.1;        
+        iarm->goToPoseSync(approach_x,o);
+        iarm->waitMotionDone();
     }
 
     /***************************************************/
     void makeItRoll(const Vector &x, const Vector &o)
     {
-        Vector rollingPosition (3);
-        rollingPosition[0] = x[0] + 0.05;
-        rollingPosition[1] = x[1] - 0.4;
-        rollingPosition[2] = x[2];
-
-        bool success = iarm->goToPose(rollingPosition,o);
-        iarm->waitMotionDone(0.1,30);
-
-//        Vector xdot(3),odot(4);
-//        xdot.zero();
-//        xdot[1] = -0.3;
-//        odot.zero();
-//        iarm->setTaskVelocities(xdot,odot);
-//        usleep(10000000);
-//        xdot.zero();
-//        iarm->setTaskVelocities(xdot,odot);
+        iarm->setTrajTime(0.3);
+        iarm->goToPoseSync(x,o);
     }
 
     /***************************************************/
     void look_down()
     {
-        Vector ang(3);
-        ang[0] = 0;
-        ang[1] = -40;
-        ang[2] = 0;
-
-        igaze->lookAtRelAngles(ang);
+        Vector ang(3,0.0);
+        ang[1]=-40.0;
+        igaze->lookAtAbsAngles(ang);
         igaze->waitMotionDone();
     }
 
     /***************************************************/
-
     void roll(const Vector &cogL, const Vector &cogR)
     {
         yInfo("detected cogs = (%s) (%s)",
@@ -155,7 +130,7 @@ protected:
         fixate(x);
         yInfo("fixating at (%s)",x.toString(3,3).c_str());
 
-        Vector o = computeHandOrientation();
+        Vector o=computeHandOrientation();
         yInfo("computed orientation = (%s)",o.toString(3,3).c_str());
 
         approachTargetWithHand(x,o);
@@ -168,17 +143,48 @@ protected:
     /***************************************************/
     void home()
     {
-        igaze->lookAtAbsAngles(homeHeadOrientation);
-        iarm->goToPose(armHomePosition,armHomeOrientation);
-        igaze->waitMotionDone();
-        iarm->waitMotionDone();
+        Vector ang(3,0.0);
+        igaze->setTrackingMode(true);
+        igaze->lookAtAbsAngles(ang);
+      
+        Vector x(3);
+        x[0]=-0.2;
+        x[1]=0.35;
+        x[2]=0.1;
+        iarm->setTrajTime(0.75);
+        iarm->goToPosition(x);
     }
 
 public:
     /***************************************************/
     bool configure(ResourceFinder &rf)
     {
-        // FILL IN THE CODE
+        Property optArm("(device cartesiancontrollerclient)");
+        optArm.put("remote","/icubSim/cartesianController/right_arm");
+        optArm.put("local","/cartesian_client/right_arm");
+        if (!drvArm.open(optArm))
+            return false;
+
+        Property optGaze("(device gazecontrollerclient)");
+        optGaze.put("remote","/iKinGazeCtrl");
+        optGaze.put("local","/gaze_client");
+        if (!drvGaze.open(optGaze))
+        {
+            drvArm.close();
+            return false;
+        }
+
+        drvArm.view(iarm);
+        drvGaze.view(igaze);
+
+        // save startup contexts
+        iarm->storeContext(&startup_ctxt_arm);
+        igaze->storeContext(&startup_ctxt_gaze);
+
+        // make the controllers move faster
+        iarm->setTrajTime(0.5);
+        igaze->blockNeckRoll(0.0);
+        igaze->setNeckTrajTime(0.5);
 
         imgLPortIn.open("/imgL:i");
         imgRPortIn.open("/imgR:i");
@@ -189,57 +195,6 @@ public:
         rpcPort.open("/service");
         attach(rpcPort);
 
-        //Configuring drivers for head
-        Property options;
-        options.put("device", "gazecontrollerclient");
-        options.put("local", "/client/head");
-        options.put("remote", "/iKinGazeCtrl");
-        drvGaze.open(options);
-
-        if (!drvGaze.isValid()){
-            std::cerr << "Device not available! The known devices are" << std::endl;
-            std::cerr << Drivers::factory().toString().c_str() << std::endl;
-            return false;
-        }
-
-        drvGaze.view(igaze);
-        if (igaze == 0){
-            std::cerr << "Error opening position control interface for gaze" << std::endl;
-            return false;
-        }
-
-        //Configuring drivers for right arm
-        options.put("device", "cartesiancontrollerclient");
-        options.put("local", "/client/right_arm");
-        options.put("remote", "/icubSim/cartesianController/right_arm");
-
-        drvArm.open(options);
-        if (!drvArm.isValid()){
-            std::cerr << "Device not available! The known devices are" << std::endl;
-            std::cerr << Drivers::factory().toString().c_str() << std::endl;
-            return false;
-        }
-
-        drvArm.view(iarm);
-        if (iarm == 0){
-            std::cerr << "Error opening position control interface for right arm" << std::endl;
-            return false;
-        }
-
-        Vector curDof, newDof;
-        iarm->getDOF(curDof);
-        newDof = curDof;
-        newDof[0] = 0; //yaw disabled
-        newDof[1] = 1; //roll enabled
-        newDof[2] = 0; //pitch disabled
-
-        iarm->setDOF(newDof,curDof);
-
-        iarm->setTrackingMode(false);
-        igaze->getAngles(homeHeadOrientation);
-        iarm->getPose(armHomePosition,armHomeOrientation);
-        std::cout << "armHomePosition = " << armHomePosition.toString() << std::endl;
-        std::cout << "armHomeOrientation = " << armHomeOrientation.toString() << std::endl;
         return true;
     }
 
@@ -254,7 +209,9 @@ public:
     /***************************************************/
     bool close()
     {
-//        home();
+        iarm->restoreContext(startup_ctxt_arm);
+        igaze->restoreContext(startup_ctxt_gaze);
+
         drvArm.close();
         drvGaze.close();
         imgLPortIn.close();
@@ -265,8 +222,7 @@ public:
         return true;
     }
 
-
-/***************************************************/
+    /***************************************************/
     bool respond(const Bottle &command, Bottle &reply)
     {
         string cmd=command.get(0).asString();
@@ -284,12 +240,15 @@ public:
             look_down();
             reply.addString("Yep! I'm looking down now!");
         }
-        else if (cmd=="roll")
+        else if (cmd=="make_it_roll")
         {
-            double p[3] = {-0.1,0.35,0.15};
-            iarm->goToPosition(Vector(3,p));
+            mutex.lock();            
+            Vector cogL=this->cogL;
+            Vector cogR=this->cogR;
+            bool go=okL && okR;
+            mutex.unlock();
 
-            if (okL && okR)
+            if (go)
             {
                 roll(cogL,cogR);
                 reply.addString("Yeah! I've made it roll like a charm!");
@@ -323,7 +282,7 @@ public:
 
         // interrupt sequence detected
         if ((imgL==NULL) || (imgR==NULL))
-            return true;
+            return false;
 
         // compute the center-of-mass of pixels of our color
         mutex.lock();
@@ -343,24 +302,20 @@ public:
         imgLPortOut.write(*imgL);
         imgRPortOut.write(*imgR);
 
-        return true;
+        return true; 
     }
-
-
 };
 
 
 /***************************************************/
 int main()
-{
+{   
     Network yarp;
     if (!yarp.checkNetwork())
         return 1;
 
     CtrlModule mod;
     ResourceFinder rf;
-    mod.runModule(rf);
-
-    return 0;
+    return mod.runModule(rf);
 }
 
