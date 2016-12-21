@@ -5,14 +5,11 @@
 #include <yarp/sig/all.h>
 #include <yarp/math/Math.h>
 
-#include <iCub/ctrl/math.h>
-
 using namespace std;
 using namespace yarp::os;
 using namespace yarp::dev;
 using namespace yarp::sig;
 using namespace yarp::math;
-using namespace iCub::ctrl;
 
 
 /***************************************************/
@@ -22,6 +19,8 @@ protected:
     PolyDriver drvArm, drvGaze;
     ICartesianControl *iarm;
     IGazeControl      *igaze;
+    int startup_ctxt_arm;
+    int startup_ctxt_gaze;
 
     BufferedPort<ImageOf<PixelRgb> > imgLPortIn,imgRPortIn;
     Port imgLPortOut,imgRPortOut;
@@ -66,37 +65,57 @@ protected:
     /***************************************************/
     Vector retrieveTarget3D(const Vector &cogL, const Vector &cogR)
     {
-        // FILL IN THE CODE
+        Vector x;
+        igaze->triangulate3DPoint(cogL,cogR,x);
+        return x;
     }
 
     /***************************************************/
     void fixate(const Vector &x)
-    {
-        // FILL IN THE CODE
+    {        
+        igaze->lookAtFixationPoint(x);
+        igaze->waitMotionDone();
+        igaze->setTrackingMode(true);
     }
 
     /***************************************************/
     Vector computeHandOrientation()
     {
-        // FILL IN THE CODE
+        Matrix R(3,3);
+        R(0,0)=-1.0; R(0,1)= 0.0; R(0,2)= 0.0;
+        R(1,0)= 0.0; R(1,1)= 0.0; R(1,2)=-1.0;
+        R(2,0)= 0.0; R(2,1)=-1.0; R(2,2)= 0.0;
+
+        return dcm2axis(R);
     }
 
     /***************************************************/
     void approachTargetWithHand(const Vector &x, const Vector &o)
     {
-        // FILL IN THE CODE
+        // enable torso dofs
+        Vector dof(3,1.0);
+        iarm->setDOF(dof,dof);
+
+        Vector approach_x=x;
+        approach_x[1]+=0.1;        
+        iarm->goToPoseSync(approach_x,o);
+        iarm->waitMotionDone();
     }
 
     /***************************************************/
     void makeItRoll(const Vector &x, const Vector &o)
     {
-        // FILL IN THE CODE
+        iarm->setTrajTime(0.3);
+        iarm->goToPoseSync(x,o);
     }
 
     /***************************************************/
     void look_down()
     {
-        // FILL IN THE CODE
+        Vector ang(3,0.0);
+        ang[1]=-40.0;
+        igaze->lookAtAbsAngles(ang);
+        igaze->waitMotionDone();
     }
 
     /***************************************************/
@@ -124,14 +143,48 @@ protected:
     /***************************************************/
     void home()
     {
-        // FILL IN THE CODE
+        Vector ang(3,0.0);
+        igaze->setTrackingMode(true);
+        igaze->lookAtAbsAngles(ang);
+      
+        Vector x(3);
+        x[0]=-0.2;
+        x[1]=0.35;
+        x[2]=0.1;
+        iarm->setTrajTime(0.75);
+        iarm->goToPosition(x);
     }
 
 public:
     /***************************************************/
     bool configure(ResourceFinder &rf)
     {
-        // FILL IN THE CODE
+        Property optArm("(device cartesiancontrollerclient)");
+        optArm.put("remote","/icubSim/cartesianController/right_arm");
+        optArm.put("local","/cartesian_client/right_arm");
+        if (!drvArm.open(optArm))
+            return false;
+
+        Property optGaze("(device gazecontrollerclient)");
+        optGaze.put("remote","/iKinGazeCtrl");
+        optGaze.put("local","/gaze_client");
+        if (!drvGaze.open(optGaze))
+        {
+            drvArm.close();
+            return false;
+        }
+
+        drvArm.view(iarm);
+        drvGaze.view(igaze);
+
+        // save startup contexts
+        iarm->storeContext(&startup_ctxt_arm);
+        igaze->storeContext(&startup_ctxt_gaze);
+
+        // make the controllers move faster
+        iarm->setTrajTime(0.5);
+        igaze->blockNeckRoll(0.0);
+        igaze->setNeckTrajTime(0.5);
 
         imgLPortIn.open("/imgL:i");
         imgRPortIn.open("/imgR:i");
@@ -156,6 +209,9 @@ public:
     /***************************************************/
     bool close()
     {
+        iarm->restoreContext(startup_ctxt_arm);
+        igaze->restoreContext(startup_ctxt_gaze);
+
         drvArm.close();
         drvGaze.close();
         imgLPortIn.close();
@@ -184,11 +240,15 @@ public:
             look_down();
             reply.addString("Yep! I'm looking down now!");
         }
-        else if (cmd=="roll")
+        else if (cmd=="make_it_roll")
         {
-            // FILL IN THE CODE
+            mutex.lock();            
+            Vector cogL=this->cogL;
+            Vector cogR=this->cogR;
+            bool go=okL && okR;
+            mutex.unlock();
 
-            if (...)
+            if (go)
             {
                 roll(cogL,cogR);
                 reply.addString("Yeah! I've made it roll like a charm!");
@@ -242,14 +302,14 @@ public:
         imgLPortOut.write(*imgL);
         imgRPortOut.write(*imgR);
 
-        return true;
+        return true; 
     }
 };
 
 
 /***************************************************/
 int main()
-{
+{   
     Network yarp;
     if (!yarp.checkNetwork())
         return 1;

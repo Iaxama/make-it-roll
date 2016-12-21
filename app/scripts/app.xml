@@ -9,8 +9,49 @@
       <port>/iKinGazeCtrl/rpc</port>
   </dependencies>
 
-  <!-->FILL IN THE APPLICATION<-->
-  
+    <module>
+        <name>make-it-roll</name>
+        <node>localhost</node>
+    </module>
+
+    <module>
+        <name>yarpview</name>
+        <parameters>--x 100</parameters>
+        <node>localhost</node>
+        <prefix>/leftView</prefix>
+    </module>
+
+    <module>
+        <name>yarpview</name>
+        <parameters>--x 500</parameters>
+        <node>localhost</node>
+        <prefix>/rightView</prefix>
+    </module>
+
+    <connection>
+        <from>/icubSim/cam/left</from>
+        <to>/imgL:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/icubSim/cam/right</from>
+        <to>/imgR:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/imgL:o</from>
+        <to>/leftView/yarpview/img:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/imgR:o</from>
+        <to>/rightView/yarpview/img:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
 </application>
 
 
