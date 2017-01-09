@@ -12,8 +12,10 @@ include(YarpInstallationHelpers)
 include(ICUBcontribHelpers)
 include(ICUBcontribOptions)
 icubcontrib_set_default_prefix()
+include_directories(src/include)
 
 add_subdirectory(src)
 add_subdirectory(app)
+add_subdirectory(tests)
 
 icubcontrib_add_uninstall_target()
