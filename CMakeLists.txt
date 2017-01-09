@@ -14,6 +14,9 @@ include(ICUBcontribOptions)
 icubcontrib_set_default_prefix()
 include_directories(src/include)
 
+#Allowing linking between dynamic and static libraries
+set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+
 add_subdirectory(src)
 add_subdirectory(app)
 add_subdirectory(tests)
