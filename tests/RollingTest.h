@@ -10,12 +10,19 @@
 #ifndef _ROLLINGTEST_H_
 #define _ROLLINGTEST_H_
 
+#include <thread>
+#include <rtf/TestAssert.h>
+#include <rtf/dll/Plugin.h>
+
 #include <rtf/TestCase.h>
 #include <CtrlModule.h>
 
 class RollingTest : public RTF::TestCase {
 private:
-    CtrlModule* ctrlModule;
+    Network yarp;
+    yarp::os::RpcClient rpcCommandPort;
+    yarp::os::RpcClient rpcSimulatorPort;
+
 
 public:
     RollingTest();
