@@ -82,6 +82,7 @@
     {
         iarm->setTrajTime(0.3);
         iarm->goToPoseSync(x,o);
+        iarm->waitMotionDone();
     }
 
     /***************************************************/
@@ -136,8 +137,10 @@
         Property optArm("(device cartesiancontrollerclient)");
         optArm.put("remote","/icubSim/cartesianController/right_arm");
         optArm.put("local","/cartesian_client/right_arm");
-        if (!drvArm.open(optArm))
+        if (!drvArm.open(optArm)) {
+            drvArm.close();
             return false;
+        }
 
         Property optGaze("(device gazecontrollerclient)");
         optGaze.put("remote","/iKinGazeCtrl");
@@ -167,7 +170,9 @@
         imgRPortOut.open("/imgR:o");
 
         rpcPort.open("/service");
-        attach(rpcPort);
+
+        if (!attach(rpcPort))
+            return false;
 
         return true;
     }

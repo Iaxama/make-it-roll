@@ -17,6 +17,9 @@ include_directories(src/include)
 #Allowing linking between dynamic and static libraries
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 
+#Using C++11
+set(CMAKE_CXX_STANDARD 11)
+
 add_subdirectory(src)
 add_subdirectory(app)
 add_subdirectory(tests)

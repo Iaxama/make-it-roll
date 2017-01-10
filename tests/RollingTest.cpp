@@ -7,13 +7,13 @@
  *
  */
 
-
-#include <rtf/TestAssert.h>
-#include <rtf/dll/Plugin.h>
-
 #include "RollingTest.h"
 
 using namespace RTF;
+using namespace yarp::math;
+using namespace yarp::os;
+using namespace yarp::sig;
+
 
 PREPARE_PLUGIN(RollingTest)
 
@@ -22,30 +22,71 @@ RollingTest::RollingTest() : TestCase("RollingTest") { }
 RollingTest::~RollingTest() { }
 
 bool RollingTest::setup(int argc, char** argv) {
+    RTF_TEST_REPORT("Testing network connection");
+    RTF_ASSERT_ERROR_IF(yarp.checkNetwork(),"Not connected to network");
 
-    ctrlModule = new CtrlModule;
+    RTF_TEST_REPORT("Testing port connection");
+    rpcCommandPort.open("/testingClient/commands");
+    RTF_ASSERT_ERROR_IF(yarp.connect("/testingClient/commands","/service"),"RPC port not connected");
 
-    RTF_ASSERT_ERROR_IF(ctrlModule != NULL, "ctrlModule not correctly instantiated");
-    RTF_TEST_REPORT("running RollingTest::setup...");
+    rpcSimulatorPort.open("/testingClient/simulator");
+    RTF_ASSERT_ERROR_IF(yarp.connect("/testingClient/simulator","/icubSim/world"),"RPC port not connected");
 
     return true;
 }
 
 
 void RollingTest::run() {
-    RTF_TEST_REPORT("testing integers");
-    RTF_TEST_FAIL_IF(4<3, "is not smaller");
-    RTF_TEST_CHECK(2<3,"test 2<3");
-    RTF_TEST_CHECK(4<3,"test 4<3");
-    int a = 5;
-    int b = 3;
-    RTF_TEST_FAIL_IF(a<b, Asserter::format("%d is not smaller than %d.", a, b));
+
+    Bottle command, reply;
+
+    RTF_TEST_REPORT("Getting initial ball position");
+    command.addString("world");
+    command.addString("get");
+    command.addString("ball");
+    rpcSimulatorPort.write(command,reply);
+    Vector initialBallPosition(3);
+    initialBallPosition [0]= reply.get(0).asDouble();
+    initialBallPosition [1]= reply.get(1).asDouble();
+    initialBallPosition [2]= reply.get(2).asDouble();
+
+    std::cout << "initial ball position = " << initialBallPosition.toString() << std::endl;
+
+    command.clear();
+    reply.clear();
+    RTF_TEST_REPORT("Testing look_down method");
+    command.addString("look_down");
+    rpcCommandPort.write(command,reply);
+    RTF_TEST_REPORT(Asserter::format("Reply: %s",reply.get(0).asString().c_str()));
+
+    command.clear();
+    reply.clear();
+    RTF_TEST_REPORT("Testing make_it_roll method");
+    command.addString("make_it_roll");
+    rpcCommandPort.write(command,reply);
+    RTF_TEST_REPORT(Asserter::format("Reply: %s",reply.get(0).asString().c_str()));
+
+    command.clear();
+    reply.clear();
+    RTF_TEST_REPORT("Getting new ball position");
+    command.addString("world");
+    command.addString("get");
+    command.addString("ball");
+    rpcSimulatorPort.write(command,reply);
+    Vector newBallPosition(3);
+    newBallPosition [0]= reply.get(0).asDouble();
+    newBallPosition [1]= reply.get(1).asDouble();
+    newBallPosition [2]= reply.get(2).asDouble();
+
+    std::cout << "new ball position = " << newBallPosition.toString() << std::endl;
+
+    RTF_ASSERT_FAIL_IF(!(newBallPosition == initialBallPosition),"The ball was not hit");
+
 }
 
 void RollingTest::tearDown() {
 
-    delete ctrlModule;
-    RTF_TEST_REPORT("running RollingTest::teardown...");
-    // assert an arbitrary error for example.
-    RTF_ASSERT_ERROR("this is just for example!");
+    RTF_TEST_REPORT("Closing ports");
+    rpcCommandPort.close();
+    rpcSimulatorPort.close();
 }
