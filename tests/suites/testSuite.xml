@@ -6,7 +6,7 @@
     <fixture param="--fixture system_fixture.xml">yarpmanager</fixture>
     <fixture param="--fixture make-it-roll_fixture.xml">yarpmanager</fixture>
     <!-- Rollingtest -->
-    <test type="dll">../../build/lib/librollingTest</test>
+    <test type="dll">librollingTest</test>
 
 
 </suit>

@@ -18,10 +18,10 @@ add_library(${PROJECT_NAME} MODULE
         RollingTest.cpp RollingTest.h)
 target_link_libraries(${PROJECT_NAME}  ${RTF_LIBRARIES} CtrlModule)
 
-install(TARGETS ${PROJECTNAME}
-        EXPORT ${PROJECTNAME}
+install(TARGETS ${PROJECT_NAME}
+        EXPORT ${PROJECT_NAME}
         COMPONENT runtime
         LIBRARY DESTINATION lib)
 
 file(GLOB scripts fixtures/*.xml)
-yarp_install(FILES ${scripts} DESTINATION ${ICUBCONTRIB_DATA_INSTALL_DIR}/fixtures)
+yarp_install(FILES ${scripts} DESTINATION fixtures)

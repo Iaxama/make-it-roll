@@ -44,4 +44,5 @@ Thumbs.db
 #IDE files#
 #####################
 .idea/
-tests/suites/result.txt
+*result.txt
+install/
