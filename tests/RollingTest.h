@@ -10,7 +10,6 @@
 #ifndef _ROLLINGTEST_H_
 #define _ROLLINGTEST_H_
 
-#include <thread>
 #include <rtf/TestAssert.h>
 #include <rtf/dll/Plugin.h>
 
