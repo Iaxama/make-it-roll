@@ -50,7 +50,8 @@ void RollingTest::run() {
     initialBallPosition [1]= reply.get(1).asDouble();
     initialBallPosition [2]= reply.get(2).asDouble();
 
-    std::cout << "initial ball position = " << initialBallPosition.toString() << std::endl;
+    RTF_TEST_REPORT(Asserter::format("Initial ball position = [%f, %f, %f]", initialBallPosition[0],initialBallPosition[1],initialBallPosition[2]));
+//    std::cout << "initial ball position = " << initialBallPosition.toString() << std::endl;
 
     command.clear();
     reply.clear();
@@ -78,7 +79,7 @@ void RollingTest::run() {
     newBallPosition [1]= reply.get(1).asDouble();
     newBallPosition [2]= reply.get(2).asDouble();
 
-    std::cout << "new ball position = " << newBallPosition.toString() << std::endl;
+    RTF_TEST_REPORT(Asserter::format("New ball position = [%f, %f, %f]", newBallPosition[0],newBallPosition[1],newBallPosition[2]));
 
     RTF_ASSERT_FAIL_IF(!(newBallPosition == initialBallPosition),"The ball was not hit");
 
