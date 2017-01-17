@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<suit name="Rolling test">
+    <description>Testing ball hit</description>
+
+    <fixture param="--fixture system_fixture.xml">yarpmanager</fixture>
+    <fixture param="--fixture make-it-roll_fixture.xml">yarpmanager</fixture>
+    <!-- Rollingtest -->
+    <test type="dll">librollingTest</test>
+
+
+</suit>

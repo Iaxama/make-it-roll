@@ -1,6 +1,6 @@
 <application>
 
-  <name>Make It Roll</name>
+  <name>make-it-roll</name>
 
   <dependencies>
       <port>/icubSim/cam/left</port>

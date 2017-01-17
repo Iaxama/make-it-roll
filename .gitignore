@@ -44,3 +44,5 @@ Thumbs.db
 #IDE files#
 #####################
 .idea/
+*result.txt
+install/
