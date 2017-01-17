@@ -1,9 +1,9 @@
 //
-// Created by miacono on 09/01/17.
+// Created by miacono on 17/01/17.
 //
 
-#ifndef MAKE_IT_ROLL_CTRLMODULE_H
-#define MAKE_IT_ROLL_CTRLMODULE_H
+#ifndef ASSIGNMENT_MAKE_IT_ROLL_CTRLMODULE_H
+#define ASSIGNMENT_MAKE_IT_ROLL_CTRLMODULE_H
 
 #include <string>
 
@@ -11,7 +11,6 @@
 #include <yarp/dev/all.h>
 #include <yarp/sig/all.h>
 #include <yarp/math/Math.h>
-
 
 using namespace std;
 using namespace yarp::os;
@@ -28,28 +27,27 @@ protected:
     int startup_ctxt_gaze;
 
     BufferedPort<ImageOf<PixelRgb> > imgLPortIn,imgRPortIn;
-    Port imgLPortOut,imgRPortOut;
+    BufferedPort<ImageOf<PixelRgb> > imgLPortOut,imgRPortOut;
     RpcServer rpcPort;
 
     Mutex mutex;
     Vector cogL,cogR;
     bool okL,okR;
 
-
     bool getCOG(ImageOf<PixelRgb> &img, Vector &cog);
 
     Vector retrieveTarget3D(const Vector &cogL, const Vector &cogR);
 
     void fixate(const Vector &x);
-    
+
     Vector computeHandOrientation();
-    
+
     void approachTargetWithHand(const Vector &x, const Vector &o);
-    
-    void makeItRoll(const Vector &x, const Vector &o);
-    
+
+    void make_it_roll(const Vector &x, const Vector &o);
+
     void look_down();
-    
+
     void roll(const Vector &cogL, const Vector &cogR);
 
     void home();
@@ -70,4 +68,4 @@ public:
 };
 
 
-#endif //MAKE_IT_ROLL_CTRLMODULE_H
+#endif //ASSIGNMENT_MAKE_IT_ROLL_CTRLMODULE_H

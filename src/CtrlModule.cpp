@@ -1,9 +1,8 @@
 //
-// Created by miacono on 09/01/17.
+// Created by miacono on 17/01/17.
 //
 
-#include "CtrlModule.h"
-
+#include "include/CtrlModule.h"
 
     /***************************************************/
     bool CtrlModule::getCOG(ImageOf<PixelRgb> &img, Vector &cog)
@@ -78,7 +77,7 @@
     }
 
     /***************************************************/
-    void CtrlModule::makeItRoll(const Vector &x, const Vector &o)
+    void CtrlModule::roll(const Vector &x, const Vector &o)
     {
         iarm->setTrajTime(0.3);
         iarm->goToPoseSync(x,o);
@@ -95,25 +94,24 @@
     }
 
     /***************************************************/
-    void CtrlModule::roll(const Vector &cogL, const Vector &cogR)
+    void CtrlModule::make_it_roll(const Vector &cogL, const Vector &cogR)
     {
-        yInfo("detected cogs = (%s) (%s)",
-              cogL.toString(0,0).c_str(),cogR.toString(0,0).c_str());
+        yInfo()<<"detected cogs = ("<<cogL.toString(0,0)<<") ("<<cogR.toString(0,0)<<")";
 
         Vector x=retrieveTarget3D(cogL,cogR);
-        yInfo("retrieved 3D point = (%s)",x.toString(3,3).c_str());
+        yInfo()<<"retrieved 3D point = ("<<x.toString(3,3)<<")";
 
         fixate(x);
-        yInfo("fixating at (%s)",x.toString(3,3).c_str());
+        yInfo()<<"fixating at ("<<x.toString(3,3)<<")";
 
         Vector o=computeHandOrientation();
-        yInfo("computed orientation = (%s)",o.toString(3,3).c_str());
+        yInfo()<<"computed orientation = ("<<o.toString(3,3)<<")";
 
         approachTargetWithHand(x,o);
-        yInfo("approached");
+        yInfo()<<"approached";
 
-        makeItRoll(x,o);
-        yInfo("roll!");
+        roll(x,o);
+        yInfo()<<"roll!";
     }
 
     /***************************************************/
@@ -134,11 +132,30 @@
     /***************************************************/
     bool CtrlModule::configure(ResourceFinder &rf)
     {
-        Property optArm("(device cartesiancontrollerclient)");
+        Property optArm;
+        optArm.put("device","cartesiancontrollerclient");
         optArm.put("remote","/icubSim/cartesianController/right_arm");
         optArm.put("local","/cartesian_client/right_arm");
-        if (!drvArm.open(optArm)) {
-            drvArm.close();
+
+        // let's give the controller some time to warm up
+        bool ok=false;
+        double t0=Time::now();
+        while (Time::now()-t0<10.0)
+        {
+            // this might fail if controller
+            // is not connected to solver yet
+            if (drvArm.open(optArm))
+            {
+                ok=true;
+                break;
+            }
+
+            Time::delay(1.0);
+        }
+
+        if (!ok)
+        {
+            yError()<<"Unable to open the Cartesian Controller";
             return false;
         }
 
@@ -217,6 +234,8 @@
         else if (cmd=="look_down")
         {
             look_down();
+            // we assume the robot is not moving now
+            reply.addString("ack");
             reply.addString("Yep! I'm looking down now!");
         }
         else if (cmd=="make_it_roll")
@@ -229,18 +248,26 @@
 
             if (go)
             {
-                roll(cogL,cogR);
+                make_it_roll(cogL,cogR);
+                // we assume the robot is not moving now
+                reply.addString("ack");
                 reply.addString("Yeah! I've made it roll like a charm!");
             }
             else
+            {
+                reply.addString("nack");
                 reply.addString("I don't see any object!");
+            }
         }
         else if (cmd=="home")
         {
             home();
+            // we assume the robot is not moving now
+            reply.addString("ack");
             reply.addString("I've got the hard work done! Going home.");
         }
         else
+            // the father class already handles the "quit" command
             return RFModule::respond(command,reply);
 
         return true;
@@ -278,9 +305,13 @@
         if (okR)
             draw::addCircle(*imgR,color,(int)cogR[0],(int)cogR[1],5);
 
-        imgLPortOut.write(*imgL);
-        imgRPortOut.write(*imgR);
+        imgLPortOut.prepare()=*imgL;
+        imgRPortOut.prepare()=*imgR;
+
+        imgLPortOut.write();
+        imgRPortOut.write();
 
         return true;
     }
+
 
