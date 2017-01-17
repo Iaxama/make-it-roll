@@ -23,7 +23,6 @@ icubcontrib_set_default_prefix()
 include_directories(${YARP_INCLUDE_DIRS})
 include_directories( ${CMAKE_SOURCE_DIR}/src)
 
-
 add_executable(${PROJECT_NAME} ${CMAKE_SOURCE_DIR}/src/main.cpp ${CMAKE_SOURCE_DIR}/src/CtrlModule.cpp ${CMAKE_SOURCE_DIR}/src/include/CtrlModule.h)
 target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
